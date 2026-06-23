@@ -4,3 +4,7 @@ __pycache__/
 *.txt
 check_vectorstore_quality.py
 view_content.py
+vectorstore_db/
+enterprise_data/
+src/cli/vectorstore_contents.csv
+uv.lock
