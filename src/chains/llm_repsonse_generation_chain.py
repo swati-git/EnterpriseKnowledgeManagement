@@ -14,4 +14,4 @@ prompt = ChatPromptTemplate.from_template(
 
 )
 
-llm_answer = prompt | llm | StrOutputParser()
+response_formatter = prompt | llm | StrOutputParser()
