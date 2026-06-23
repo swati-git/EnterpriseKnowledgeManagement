@@ -9,12 +9,11 @@ from langchain.schema import Document
 
 load_dotenv()
 
-def load_documents():
+def load_documents() -> list[Document]:
     path= Path(__file__).parent.parent.parent / "enterprise_data"
     PROJECT_ROOT = Path(__file__).parent.parent.parent
 
     document_loader=DirectoryLoader(str(path) ,glob="*.pdf",loader_cls=PyPDFLoader) # type: ignore
-
     return document_loader.load() 
 
 def split_text(documents: list[Document]):
@@ -32,20 +31,16 @@ def split_text(documents: list[Document]):
     length_function=len, # Function to compute the length of the text
     add_start_index=True, # Flag to add start index to each chunk
   )
-
-  # Split documents into smaller chunks using text splitter
   chunks = text_splitter.split_documents(documents)
-  print(f"Split {len(documents)} documents into {len(chunks)} chunks.")
 
-  return chunks # Return the list of split text chunks
+  return chunks 
 
 def save_to_chroma(documents: list[Document]):
    global vectorstore
    
    vectorstore_db_path= Path(__file__).parent.parent.parent / "vectorstore_db"
-
    embeddings = CohereEmbeddings( model="embed-english-v3.0")   
- 
+   
    vectorstore = Chroma.from_documents(
         documents=documents,
         embedding=embeddings,
@@ -57,8 +52,9 @@ def initialize_retriever():
    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
    return retriever
 
-
 def initialize_vectorstore():
+    
     documents = load_documents()
-    split_documents = split_text(documents) 
+    split_documents = split_text(documents)
     save_to_chroma(split_documents)
+
