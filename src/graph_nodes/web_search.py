@@ -14,5 +14,6 @@ def web_search(graph_state: GraphState) -> Dict[str, Any]:
     tavily_results = web_search_tool.invoke({"query" : graph_state["query"]})["results"]
     complete_result = "\n".join([tavily_result["content"] for tavily_result in tavily_results])
     web_results = Document(page_content=complete_result)
-    return {"documents": web_results, "query": graph_state["query"]}
-    return {"response": "This is a simulated web search result."}
+    return {"documents": web_results, 
+            "query": graph_state["query"]}
+
