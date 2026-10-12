@@ -4,6 +4,6 @@ from langchain.schema import Document
 
 class GraphState(TypedDict):
     query: str
-    ll_generated_response: Annotated[list, add_messages]
+    llm_generated_response: str
     documents : List[Document]
-    grade: bool
+    relevant: bool

@@ -14,4 +14,4 @@ def grader(graph_state: GraphState) -> Dict[str, Any]:
     for document in list_of_documents:
       print(f"Document : {document}")  
     print(f"Grader graded the documents as : {grade}")
-    return {"relevant": grade}
+    return {"relevant": bool(grade and grade.relevant)}
