@@ -10,7 +10,7 @@ from typing import List
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
-from src.models.model import decision_model
+from src.models.model import decision_model,retry_on_rate_limit
 
 
 class GroundednessOutput(BaseModel):
@@ -30,4 +30,4 @@ _prompt = ChatPromptTemplate.from_messages(
     [("system", _system), ("human", "Documents:\n{documents}\n\nAnswer:\n{answer}")]
 )
 
-groundedness_checker = _prompt | decision_model.with_structured_output(GroundednessOutput)
+groundedness_checker = retry_on_rate_limit(_prompt | decision_model.with_structured_output(GroundednessOutput))

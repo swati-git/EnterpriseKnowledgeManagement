@@ -1,4 +1,4 @@
-from src.models.model import llm_model
+from src.models.model import llm_model, retry_on_rate_limit
 from pydantic import BaseModel
 from typing import Literal
 from langchain.prompts import ChatPromptTemplate
@@ -21,6 +21,6 @@ prompt = ChatPromptTemplate.from_messages(
      ]
      )
 
-query_router = prompt | llm_model.with_structured_output(QueryRouter)
+query_router = retry_on_rate_limit(prompt | llm_model.with_structured_output(QueryRouter))
 
 print("---QUERY ROUTER CHAIN INITIALIZED---")

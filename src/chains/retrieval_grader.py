@@ -1,5 +1,5 @@
 import re
-from src.models.model import decision_model
+from src.models.model import decision_model, retry_on_rate_limit
 from langchain.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
@@ -25,4 +25,4 @@ retrieval_grader_template = ChatPromptTemplate.from_messages(
     ]
 )
 
-retrieval_grader =  retrieval_grader_template | decision_model.with_structured_output(RetrievalGraderOutput)
+retrieval_grader =  retry_on_rate_limit(retrieval_grader_template | decision_model.with_structured_output(RetrievalGraderOutput))

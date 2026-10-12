@@ -1,6 +1,6 @@
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from src.models.model import llm_model
+from src.models.model import llm_model, retry_on_rate_limit
 
 llm = llm_model
 
@@ -14,4 +14,4 @@ prompt = ChatPromptTemplate.from_template(
 
 )
 
-response_formatter = prompt | llm | StrOutputParser()
+response_formatter = retry_on_rate_limit(prompt | llm | StrOutputParser())

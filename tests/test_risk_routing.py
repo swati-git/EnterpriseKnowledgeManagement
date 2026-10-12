@@ -177,3 +177,35 @@ def test_eval_runs_both_versions_and_judges_delivered_answers(wired, monkeypatch
     assert "Delivered with unsupported claims:   1/1 (100%)" in summary  # baseline
     assert "Delivered with unsupported claims:   0/1 (0%)" in summary  # risk-routed
     assert "of which labelled answerable:      1" in summary
+
+# --- Rate limits -------------------------------------------------------------
+
+from cohere.errors import TooManyRequestsError
+from langchain_core.runnables import RunnableLambda
+
+from src.models.model import retry_on_rate_limit
+
+
+def _flaky(error, failures):
+    calls = {"n": 0}
+
+    def call(_):
+        calls["n"] += 1
+        if calls["n"] <= failures:
+            raise error
+        return "ok"
+
+    return RunnableLambda(call), calls
+
+
+def test_rate_limited_calls_are_retried():
+    chain, calls = _flaky(TooManyRequestsError(body=None), failures=2)
+    assert retry_on_rate_limit(chain, initial_wait=0).invoke({}) == "ok"
+    assert calls["n"] == 3
+
+
+def test_other_errors_are_not_retried():
+    chain, calls = _flaky(ValueError("bad output"), failures=1)
+    with pytest.raises(ValueError):
+        retry_on_rate_limit(chain, initial_wait=0).invoke({})
+    assert calls["n"] == 1
