@@ -19,7 +19,7 @@ from typing import List, Literal, Tuple
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
-from src.models.model import decision_model
+from src.models.model import decision_model, retry_on_rate_limit
 
 Risk = Literal["FAST", "STRICT"]
 
@@ -57,7 +57,7 @@ When unsure, return STRICT."""
 
 _prompt = ChatPromptTemplate.from_messages([("system", _system), ("user", "{query}")])
 
-risk_classifier = _prompt | decision_model.with_structured_output(RiskAssessment)
+risk_classifier = retry_on_rate_limit(_prompt | decision_model.with_structured_output(RiskAssessment))
 
 
 def assess_question_risk(query: str) -> Tuple[Risk, List[str]]:
