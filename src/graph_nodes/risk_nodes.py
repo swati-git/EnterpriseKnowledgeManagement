@@ -1,7 +1,8 @@
 from typing import Any, Dict, List
 
 from src.chains import risk_router
-from src.chains.formatting import source_label
+from src.chains.formatting import format_documents, source_label
+from src.chains.groundedness_checker import GroundednessOutput, groundedness_checker
 from src.graph_state.state import GraphState
 
 
@@ -35,10 +36,45 @@ def _sources(documents) -> List[str]:
 
 def finalize(state: GraphState) -> Dict[str, Any]:
     """Deliver the answer with its sources, and record how it was delivered."""
-    outcome = "ANSWERED_FAST" if state.get("risk") == "FAST" else "ANSWERED_UNVERIFIED"
+    # Strict answers only reach this node after passing the groundedness check.
+    outcome = "ANSWERED_FAST" if state.get("risk") == "FAST" else "ANSWERED_VERIFIED"
     answer = state.get("llm_generated_response", "")
     sources = _sources(state.get("documents"))
     if sources:
         answer += "\n\nSources: " + "; ".join(sources)
     print(f"---{outcome}---")
     return {"final_answer": answer, "outcome": outcome}
+
+
+COULD_NOT_VERIFY = "The answer could not be checked against the documents."
+
+
+def check_groundedness(state: GraphState) -> Dict[str, Any]:
+    """On the strict path, list every claim the retrieved documents don't support. Fails closed."""
+    print("---CHECK GROUNDEDNESS---")
+    try:
+        result = groundedness_checker.invoke(
+            {
+                "documents": format_documents(state.get("documents", [])),
+                "answer": state.get("llm_generated_response", ""),
+            }
+        )
+    except Exception as exc:  # a strict answer that can't be checked is not delivered
+        print(f"Groundedness check failed ({type(exc).__name__}); failing closed")
+        return {"unsupported_claims": [COULD_NOT_VERIFY]}
+    if not isinstance(result, GroundednessOutput):
+        return {"unsupported_claims": [COULD_NOT_VERIFY]}
+    claims = [c for c in result.unsupported_claims if c.strip()]
+    print(f"Unsupported claims: {claims or 'none'}")
+    return {"unsupported_claims": claims}
+
+
+def decline_unsupported(state: GraphState) -> Dict[str, Any]:
+    """Say why the answer is withheld, and which claims couldn't be verified."""
+    listed = "\n".join(f"- {claim}" for claim in state.get("unsupported_claims", []))
+    message = (
+        "I drafted an answer, but parts of it aren't supported by the documents, "
+        f"so I'm not sharing it as fact.\nCouldn't verify:\n{listed}"
+    )
+    print("---DECLINED_UNSUPPORTED---")
+    return {"final_answer": message, "outcome": "DECLINED_UNSUPPORTED"}

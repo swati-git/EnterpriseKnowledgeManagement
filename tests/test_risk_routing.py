@@ -90,3 +90,51 @@ def test_every_run_records_an_outcome(wired):  # noqa: F811
     declined = app.invoke({"query": "What is the lock-in period of our fund?"})
     assert declined["outcome"] == "DECLINED_NO_RELEVANT_DOCS"
     assert declined["final_answer"] == declined["llm_generated_response"]
+
+
+# ---------- R4: verify strict answers ----------
+
+def test_strict_supported_answer_is_verified_and_delivered(wired):  # noqa: F811
+    app, s = wired
+    state = app.invoke({"query": "What is the lock-in period of our fund?"})
+    assert state["outcome"] == "ANSWERED_VERIFIED"
+    assert state["final_answer"].endswith("Sources: fund_a.pdf (page 1)")
+    assert len(s["grounded"].calls) == 1
+
+
+def test_strict_answer_with_unsupported_claim_is_declined(wired):  # noqa: F811
+    from src.chains.groundedness_checker import GroundednessOutput
+
+    app, s = wired
+    s["answer"].result = "Fund A has a 3 year lock-in and a 1% exit load."
+    s["grounded"].result = GroundednessOutput(unsupported_claims=["Fund A has a 1% exit load."])
+    state = app.invoke({"query": "What is the lock-in period of our fund?"})
+    assert state["outcome"] == "DECLINED_UNSUPPORTED"
+    assert "- Fund A has a 1% exit load." in state["final_answer"]
+    assert "Sources:" not in state["final_answer"]
+
+
+def test_groundedness_failure_fails_closed(wired):  # noqa: F811
+    app, s = wired
+    s["grounded"].error = TimeoutError("slow")
+    state = app.invoke({"query": "What is the lock-in period of our fund?"})
+    assert state["outcome"] == "DECLINED_UNSUPPORTED"
+    assert "could not be checked" in state["final_answer"]
+
+
+def test_fast_answer_skips_the_groundedness_check(wired):  # noqa: F811
+    app, s = wired
+    s["grader"].fn = lambda p: RetrievalGraderOutput(relevant=True)
+    s["answer"].result = "Diversification spreads money across different assets."
+    state = app.invoke({"query": "What does diversification mean?"})
+    assert state["outcome"] == "ANSWERED_FAST"
+    assert s["grounded"].calls == []
+
+
+def test_escalated_answer_is_checked(wired):  # noqa: F811
+    app, s = wired
+    s["grader"].fn = lambda p: RetrievalGraderOutput(relevant=True)
+    s["answer"].result = "Index funds have historically returned around 10% a year."
+    state = app.invoke({"query": "How do index funds work?"})
+    assert len(s["grounded"].calls) == 1
+    assert state["outcome"] == "ANSWERED_VERIFIED"

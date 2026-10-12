@@ -60,6 +60,11 @@ def wired(monkeypatch):
     # Questions that no risk rule matches go to the risk classifier; keep it offline too.
     from src.chains import risk_router
     monkeypatch.setattr(risk_router, "risk_classifier", Stub(risk_router.RiskAssessment(risk="FAST", reason="test")))
+    # Strict answers go through the groundedness check; by default every claim is supported.
+    import src.graph_nodes.risk_nodes as risk_nodes_mod
+    from src.chains.groundedness_checker import GroundednessOutput
+    stubs["grounded"] = Stub(GroundednessOutput(unsupported_claims=[]))
+    monkeypatch.setattr(risk_nodes_mod, "groundedness_checker", stubs["grounded"])
 
     return graph_mod.application, stubs
 
