@@ -1,44 +1,47 @@
+import os
 import sys
 from pathlib import Path
 from typing import TypedDict
 
-sys.path.append(str(Path(__file__).parent.parent.parent))
+#sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.workflow.graph import application
 from src.create_vectorstore.create_vectorstore import build_vectorstore, index_size
 from agent_trace_sdk import AgentTracer
 from src.observability.agent_trace import AgentTraceCallback, JsonlEventSink
 
-def main():  
+REQUIRED_KEYS = ("COHERE_API_KEY", "TAVILY_API_KEY")
+
+
+def check_environment() -> None:
+    missing = [key for key in REQUIRED_KEYS if not os.getenv(key)]
+    if missing:
+        sys.exit(f"Missing environment variables: {', '.join(missing)}. Add them to .env and try again.")
+
+
+def main():
+    check_environment()
+  
     if index_size() == 0:
         print("The document index is empty; building it once (this embeds every PDF).")
         build_vectorstore()
     
-    query = input("Type your query:")
-    print(f"You asked: {query}")
+    query = input("Type your query:").strip()
+    if not query:
+        sys.exit("No question entered.")
 
-    print("Processing...")
-    result = None
-    state_input = {
-        "query": query,
-    }
 
     sink = JsonlEventSink()
     agent_tracer = AgentTracer(service_name="enterprise-knowledge-assistant", sink=sink)
     callbacks = [ AgentTraceCallback(agent_tracer)]
 
     with agent_tracer.session(agent_id="ekm-assistant", metadata={"query": query}):
-        for output in application.stream(state_input, config={"callbacks": callbacks}):
-            #print("Intermediate output:", output)
-            for key, value in output.items():
-                result = value
+        state = application.invoke({"query": query}, config={"callbacks": callbacks})
                     
-    
-    if result:
-        print(f"\nAnswer: {format_response(result)}")
-        print(sink.session_summary())
-    else:
-        print("No response generated.")
+
+    print(f"\nSource: {state.get('source')}")
+    print(f"Answer: {state.get('llm_generated_response', 'No response generated.')}")
+    print(sink.session_summary())
 
 def format_response(result):
     """Extract response from workflow result."""
