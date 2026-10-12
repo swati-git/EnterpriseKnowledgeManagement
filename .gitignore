@@ -11,3 +11,4 @@ uv.lock
 TODO/
 src/telemetry/
 telemetry
+eval/results/

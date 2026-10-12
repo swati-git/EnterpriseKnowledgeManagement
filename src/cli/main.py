@@ -5,7 +5,7 @@ from typing import TypedDict
 
 #sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from src.workflow.graph import application
+from src.workflow.graph import application, baseline_application
 from src.create_vectorstore.create_vectorstore import build_vectorstore, index_size
 from agent_trace_sdk import AgentTracer
 from src.observability.agent_trace import AgentTraceCallback, JsonlEventSink
@@ -35,8 +35,13 @@ def main():
     agent_tracer = AgentTracer(service_name="enterprise-knowledge-assistant", sink=sink)
     callbacks = [ AgentTraceCallback(agent_tracer)]
 
-    with agent_tracer.session(agent_id="ekm-assistant", metadata={"query": query}):
-        state = application.invoke({"query": query}, config={"callbacks": callbacks})
+    # `python -m src.cli.main --baseline` runs the assistant without risk routing, for comparison.
+    baseline = "--baseline" in sys.argv
+    app = baseline_application if baseline else application
+    mode = "baseline" if baseline else "risk_routed"
+
+    with agent_tracer.session(agent_id="ekm-assistant", metadata={"query": query, "mode": mode}):
+        state = app.invoke({"query": query}, config={"callbacks": callbacks})
                     
 
     print(f"\nSource: {state.get('source')} | Risk: {state.get('risk')} | Outcome: {state.get('outcome')}")

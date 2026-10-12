@@ -37,7 +37,9 @@ def _sources(documents) -> List[str]:
 def finalize(state: GraphState) -> Dict[str, Any]:
     """Deliver the answer with its sources, and record how it was delivered."""
     # Strict answers only reach this node after passing the groundedness check.
-    outcome = "ANSWERED_FAST" if state.get("risk") == "FAST" else "ANSWERED_VERIFIED"
+    # Without risk routing (the baseline), nothing is checked, and the outcome says so.
+    risk = state.get("risk")
+    outcome = {"FAST": "ANSWERED_FAST", "STRICT": "ANSWERED_VERIFIED"}.get(risk, "ANSWERED_UNCHECKED")
     answer = state.get("llm_generated_response", "")
     sources = _sources(state.get("documents"))
     if sources:

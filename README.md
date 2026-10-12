@@ -13,6 +13,27 @@ A LangGraph workflow:
 
 Routing and grading use temperature 0, so the same question gets the same decisions.
 
+## Routing by risk
+
+On top of that flow, the assistant decides how strictly each answer must be checked:
+
+1. **Assess the question's risk** before retrieval. Rules for costly questions (numbers and money, our own products, terms and deadlines, advice) mark it STRICT and can't be overridden; other questions go to a classifier that fails closed to STRICT.
+2. **Check the answer's risk** after generation. An answer with figures, durations or directives escalates a FAST question to STRICT.
+3. **Verify strict answers.** A groundedness check lists every statement the retrieved documents don't support. If any are listed, the answer is withheld and the claims are named; if the check fails, the answer is withheld too.
+4. **Record the outcome** of every run: `ANSWERED_FAST`, `ANSWERED_VERIFIED`, `DECLINED_UNSUPPORTED` or `DECLINED_NO_RELEVANT_DOCS`. Delivered answers carry their sources.
+
+Run without risk routing, for comparison: `uv run python -m src.cli.main --baseline` (outcome `ANSWERED_UNCHECKED`).
+
+## Evaluation
+
+Compare the baseline with the risk-routed assistant on your own questions:
+
+1. Copy `eval/questions.example.jsonl` to `eval/questions.jsonl` and replace the questions with ones about your documents. Label each with `expected_source`, `expected_risk` and `answerable_from_docs`.
+2. Run `uv run python -m eval.run_eval`.
+3. Read `eval/results/summary.txt`; per-question details are in `results.csv`, and traces in `traces.jsonl`.
+
+Every delivered answer, in both versions, is checked by the same groundedness judge. The judge is an LLM too, so spot-check its verdicts before quoting the numbers. `eval/results/` is git-ignored because it contains document text.
+
 ## Usage examples
 
 - "What is the lock-in period of our equity fund?" → vector store (internal documents)

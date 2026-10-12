@@ -138,3 +138,42 @@ def test_escalated_answer_is_checked(wired):  # noqa: F811
     state = app.invoke({"query": "How do index funds work?"})
     assert len(s["grounded"].calls) == 1
     assert state["outcome"] == "ANSWERED_VERIFIED"
+
+
+# ---------- R5: switchable risk routing and the evaluation ----------
+
+def test_baseline_skips_risk_routing(wired, monkeypatch):  # noqa: F811
+    import src.workflow.graph as graph_mod
+
+    _, s = wired
+    state = graph_mod.baseline_application.invoke({"query": "What is the lock-in period of our fund?"})
+    assert "risk" not in state
+    assert state["outcome"] == "ANSWERED_UNCHECKED"
+    assert state["final_answer"].endswith("Sources: fund_a.pdf (page 1)")
+    assert s["grounded"].calls == []
+
+
+def test_eval_runs_both_versions_and_judges_delivered_answers(wired, monkeypatch, tmp_path):  # noqa: F811
+    import eval.run_eval as run_eval
+    from src.chains.groundedness_checker import GroundednessOutput
+    from src.observability.agent_trace import JsonlEventSink
+
+    _, s = wired
+    s["answer"].result = "Fund A has a 3 year lock-in and a 1% exit load."
+    # The runtime check (strict path) and the judge both flag the exit load.
+    s["grounded"].result = GroundednessOutput(unsupported_claims=["Fund A has a 1% exit load."])
+    monkeypatch.setattr(run_eval, "groundedness_checker", s["grounded"])
+
+    question = {"id": "q1", "query": "What is the lock-in period of our fund?",
+                "expected_source": "VECTORSTORE", "expected_risk": "STRICT", "answerable_from_docs": True}
+    sink = JsonlEventSink(tmp_path / "traces.jsonl")
+    rows = [run_eval.run_one(app, question, mode, sink) for mode, app in run_eval.MODES]
+    baseline, routed = rows
+
+    assert baseline["outcome"] == "ANSWERED_UNCHECKED" and baseline["judge_unsupported_count"] == 1
+    assert routed["outcome"] == "DECLINED_UNSUPPORTED" and routed["judge_unsupported_count"] == ""
+
+    summary = run_eval.summarize(rows)
+    assert "Delivered with unsupported claims:   1/1 (100%)" in summary  # baseline
+    assert "Delivered with unsupported claims:   0/1 (0%)" in summary  # risk-routed
+    assert "of which labelled answerable:      1" in summary

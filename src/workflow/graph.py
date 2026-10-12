@@ -34,6 +34,11 @@ def after_routing(state: GraphState) -> str:
     return "WEBSEARCH" if state.get("source") == "WEBSEARCH" else "VECTORSTORE"
 
 
+def after_grading(state: GraphState) -> str:
+    """The grader's verdict decides what happens next."""
+    return "GENERATE_ANSWER" if state.get("relevant") else "NO_RELEVANT_DOCUMENTS"
+
+
 def after_answer_risk(state: GraphState) -> str:
     """Strict answers must pass the groundedness check; fast answers go straight out."""
     return "CHECK_GROUNDEDNESS" if state.get("risk") == "STRICT" else "FINALIZE"
@@ -43,48 +48,61 @@ def after_groundedness(state: GraphState) -> str:
     return "DECLINE_UNSUPPORTED" if state.get("unsupported_claims") else "FINALIZE"
 
 
-def after_grading(state: GraphState) -> str:
-    """The grader's verdict now decides what happens next."""
-    return "GENERATE_ANSWER" if state.get("relevant") else "NO_RELEVANT_DOCUMENTS"
+def build_graph(risk_routing: bool = True):
+    """Build the assistant, with or without routing by risk.
+
+    risk_routing=False is the baseline: route, retrieve, grade, answer or decline.
+    It exists so the two versions can be compared on the same questions.
+    """
+    workflow = StateGraph(GraphState)
+
+    workflow.add_node("ROUTE", route_query)
+    workflow.add_node("WEBSEARCH", web_search)
+    workflow.add_node("VECTORSTORE", vectorstore)
+    workflow.add_node("GRADER", grader)
+    workflow.add_node("GENERATE_ANSWER", generate)
+    workflow.add_node("NO_RELEVANT_DOCUMENTS", no_relevant_documents)
+    workflow.add_node("FINALIZE", finalize)
+
+    if risk_routing:
+        workflow.add_node("ASSESS_RISK", assess_risk)
+        workflow.add_node("CHECK_ANSWER_RISK", check_answer_risk)
+        workflow.add_node("CHECK_GROUNDEDNESS", check_groundedness)
+        workflow.add_node("DECLINE_UNSUPPORTED", decline_unsupported)
+        workflow.add_edge(START, "ASSESS_RISK")
+        workflow.add_edge("ASSESS_RISK", "ROUTE")
+    else:
+        workflow.add_edge(START, "ROUTE")
+
+    workflow.add_conditional_edges("ROUTE", after_routing, {"WEBSEARCH": "WEBSEARCH", "VECTORSTORE": "VECTORSTORE"})
+    workflow.add_edge("WEBSEARCH", "GRADER")
+    workflow.add_edge("VECTORSTORE", "GRADER")
+    workflow.add_conditional_edges(
+        "GRADER",
+        after_grading,
+        {"GENERATE_ANSWER": "GENERATE_ANSWER", "NO_RELEVANT_DOCUMENTS": "NO_RELEVANT_DOCUMENTS"},
+    )
+
+    if risk_routing:
+        workflow.add_edge("GENERATE_ANSWER", "CHECK_ANSWER_RISK")
+        workflow.add_conditional_edges(
+            "CHECK_ANSWER_RISK",
+            after_answer_risk,
+            {"CHECK_GROUNDEDNESS": "CHECK_GROUNDEDNESS", "FINALIZE": "FINALIZE"},
+        )
+        workflow.add_conditional_edges(
+            "CHECK_GROUNDEDNESS",
+            after_groundedness,
+            {"DECLINE_UNSUPPORTED": "DECLINE_UNSUPPORTED", "FINALIZE": "FINALIZE"},
+        )
+        workflow.add_edge("DECLINE_UNSUPPORTED", END)
+    else:
+        workflow.add_edge("GENERATE_ANSWER", "FINALIZE")
+
+    workflow.add_edge("FINALIZE", END)
+    workflow.add_edge("NO_RELEVANT_DOCUMENTS", END)
+    return workflow.compile()
 
 
-workflow = StateGraph(GraphState)
-
-workflow.add_node("ROUTE", route_query)
-workflow.add_node("WEBSEARCH", web_search)
-workflow.add_node("VECTORSTORE", vectorstore)
-workflow.add_node("GRADER", grader)
-workflow.add_node("GENERATE_ANSWER", generate)
-workflow.add_node("NO_RELEVANT_DOCUMENTS", no_relevant_documents)
-workflow.add_node("ASSESS_RISK", assess_risk)
-workflow.add_node("CHECK_ANSWER_RISK", check_answer_risk)
-workflow.add_node("FINALIZE", finalize)
-workflow.add_node("CHECK_GROUNDEDNESS", check_groundedness)
-workflow.add_node("DECLINE_UNSUPPORTED", decline_unsupported)
-
-workflow.add_edge(START, "ASSESS_RISK")
-workflow.add_edge("ASSESS_RISK", "ROUTE")
-workflow.add_conditional_edges("ROUTE", after_routing, {"WEBSEARCH": "WEBSEARCH", "VECTORSTORE": "VECTORSTORE"})
-workflow.add_edge("WEBSEARCH", "GRADER")
-workflow.add_edge("VECTORSTORE", "GRADER")
-workflow.add_conditional_edges(
-    "GRADER",
-    after_grading,
-    {"GENERATE_ANSWER": "GENERATE_ANSWER", "NO_RELEVANT_DOCUMENTS": "NO_RELEVANT_DOCUMENTS"},
-)
-workflow.add_edge("GENERATE_ANSWER", "CHECK_ANSWER_RISK")
-workflow.add_conditional_edges(
-    "CHECK_ANSWER_RISK",
-    after_answer_risk,
-    {"CHECK_GROUNDEDNESS": "CHECK_GROUNDEDNESS", "FINALIZE": "FINALIZE"},
-)
-workflow.add_conditional_edges(
-    "CHECK_GROUNDEDNESS",
-    after_groundedness,
-    {"DECLINE_UNSUPPORTED": "DECLINE_UNSUPPORTED", "FINALIZE": "FINALIZE"},
-)
-workflow.add_edge("DECLINE_UNSUPPORTED", END)
-workflow.add_edge("FINALIZE", END)
-workflow.add_edge("NO_RELEVANT_DOCUMENTS", END)
-
-application = workflow.compile()
+application = build_graph(risk_routing=True)
+baseline_application = build_graph(risk_routing=False)
