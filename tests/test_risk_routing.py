@@ -1,0 +1,44 @@
+"""Offline tests for routing by risk."""
+
+import pytest
+
+from src.chains import risk_router
+from src.chains.risk_router import RiskAssessment, assess_question_risk
+from tests.test_baseline import Stub, wired  # noqa: F401  (reuse the stubbed graph)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "What is the lock-in period of our equity fund?",
+        "What is the exit load if I redeem in 6 months?",
+        "Should I move my savings into the debt fund?",
+        "What fees does this plan charge?",
+    ],
+)
+def test_high_risk_questions_go_strict_without_asking_the_model(query, monkeypatch):
+    classifier = Stub(RiskAssessment(risk="FAST", reason="looks harmless"))
+    monkeypatch.setattr(risk_router, "risk_classifier", classifier)
+    risk, reasons = assess_question_risk(query)
+    assert risk == "STRICT"
+    assert all(r.startswith("rule:") for r in reasons)
+    assert classifier.calls == []  # rules can't be overridden by the model
+
+
+def test_low_risk_question_uses_the_classifier(monkeypatch):
+    monkeypatch.setattr(risk_router, "risk_classifier", Stub(RiskAssessment(risk="FAST", reason="writing help")))
+    assert assess_question_risk("How do I write a good out-of-office message?") == ("FAST", ["classifier: writing help"])
+
+
+@pytest.mark.parametrize("classifier", [Stub(None), Stub(error=TimeoutError("slow"))])
+def test_classifier_failure_fails_closed(classifier, monkeypatch):
+    monkeypatch.setattr(risk_router, "risk_classifier", classifier)
+    risk, reasons = assess_question_risk("Explain diversification")
+    assert risk == "STRICT" and "failing closed" in reasons[0]
+
+
+def test_risk_is_recorded_in_the_state(wired):  # noqa: F811
+    app, _ = wired
+    state = app.invoke({"query": "What is the lock-in period of our fund?"})
+    assert state["risk"] == "STRICT"
+    assert any("lock" in r or "terms" in r for r in state["risk_reasons"])
