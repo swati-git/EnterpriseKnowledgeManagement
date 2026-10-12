@@ -1,5 +1,5 @@
 from typing import Any, Dict
-from src.chains.llm_repsonse_generation_chain import response_formatter
+from src.chains.generation_chain import response_formatter
 from src.graph_state.state import GraphState
 from src.chains.formatting import format_documents
 

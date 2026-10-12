@@ -9,3 +9,4 @@ enterprise_data/
 src/cli/vectorstore_contents.csv
 uv.lock
 TODO/
+uv.lock

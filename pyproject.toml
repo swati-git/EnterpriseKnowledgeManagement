@@ -1,16 +1,15 @@
 [project]
-name = "intelligent-decision-making"
+name = "enterprise-knowledge-management"
 version = "0.1.0"
-description = "Add your description here"
+description = "An enterprise knowledge assistant that routes questions to internal documents or web search"
 readme = "README.md"
-requires-python = "==3.12.11"
+requires-python = ">=3.12,<3.13"
 dependencies = [
    "agent-trace-sdk",
    "chromadb>=1.3.7",
    "langchain>=0.3.27",
    "langchain-cohere>=0.4.6",
    "langchain-community>=0.3.31",
-   "langchain-google-genai>=2.1.12",
    "langchain-tavily>=0.2.11",
    "langgraph>=0.6.7",
    "pypdf>=6.5.0",
