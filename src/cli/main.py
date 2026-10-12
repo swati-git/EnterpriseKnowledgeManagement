@@ -6,6 +6,8 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.workflow.graph import application
 from src.create_vectorstore.create_vectorstore import build_vectorstore, index_size
+from agent_trace_sdk import AgentTracer
+from src.observability.agent_trace import AgentTraceCallback, JsonlEventSink
 
 def main():  
     if index_size() == 0:
@@ -21,14 +23,20 @@ def main():
         "query": query,
     }
 
-    for output in application.stream(state_input) :
-        #print("Intermediate output:", output)
-        for key, value in output.items():
-            result = value
+    sink = JsonlEventSink()
+    agent_tracer = AgentTracer(service_name="enterprise-knowledge-assistant", sink=sink)
+    callbacks = [ AgentTraceCallback(agent_tracer)]
+
+    with agent_tracer.session(agent_id="ekm-assistant", metadata={"query": query}):
+        for output in application.stream(state_input, config={"callbacks": callbacks}):
+            #print("Intermediate output:", output)
+            for key, value in output.items():
+                result = value
                     
     
     if result:
         print(f"\nAnswer: {format_response(result)}")
+        print(sink.session_summary())
     else:
         print("No response generated.")
 
