@@ -209,3 +209,53 @@ def test_other_errors_are_not_retried():
     with pytest.raises(ValueError):
         retry_on_rate_limit(chain, initial_wait=0).invoke({})
     assert calls["n"] == 1
+
+
+# --- Failed calls are recorded, not mistaken for decisions -------------------
+
+def test_failed_router_and_grader_calls_are_recorded(wired):  # noqa: F811
+    app, s = wired
+    s["router"].error = TooManyRequestsError(body=None)
+    s["grader"].error = TooManyRequestsError(body=None)
+    state = app.invoke({"query": "What is the lock-in period of our fund?"})
+    # The fallbacks still run: vector store, then nothing relevant...
+    assert state["outcome"] == "DECLINED_NO_RELEVANT_DOCS"
+    # ...but the state says why, so the decline isn't taken at face value.
+    assert state["errors"] == ["ROUTE: TooManyRequestsError"] + ["GRADER: TooManyRequestsError"] * 2
+
+
+def test_a_clean_run_records_no_errors(wired):  # noqa: F811
+    app, _ = wired
+    assert app.invoke({"query": "What is the lock-in period of our fund?"})["errors"] == []
+
+
+def test_eval_leaves_out_questions_with_failed_calls(wired, monkeypatch, tmp_path):  # noqa: F811
+    import eval.run_eval as run_eval
+    from src.observability.agent_trace import JsonlEventSink
+
+    _, s = wired
+    monkeypatch.setattr(run_eval, "groundedness_checker", s["grounded"])
+    sink = JsonlEventSink(tmp_path / "traces.jsonl")
+    ok = {"id": "q1", "query": "What is the lock-in period of our fund?", "answerable_from_docs": True}
+    failed = {"id": "q2", "query": "What is the exit load of our fund?", "answerable_from_docs": True}
+
+    rows = [run_eval.run_one(app, ok, mode, sink) for mode, app in run_eval.MODES]
+    s["grader"].error = TooManyRequestsError(body=None)
+    rows += [run_eval.run_one(app, failed, mode, sink) for mode, app in run_eval.MODES]
+
+    assert [r["valid"] for r in rows] == [True, True, False, False]
+    summary = run_eval.summarize(rows)
+    assert "== baseline (1 questions) ==" in summary
+    assert "Left out, a call failed in some run: 1" in summary
+    assert "Declined:                            0/1 (0%)" in summary  # the outage isn't counted as a decline
+
+
+def test_eval_survives_a_node_that_raises(wired, monkeypatch, tmp_path):  # noqa: F811
+    import eval.run_eval as run_eval
+    from src.observability.agent_trace import JsonlEventSink
+
+    _, s = wired
+    s["answer"].error = TooManyRequestsError(body=None)  # answer generation has no fallback
+    row = run_eval.run_one(run_eval.MODES[0][1], {"id": "q1", "query": "What is the lock-in period of our fund?"},
+                           "baseline", JsonlEventSink(tmp_path / "traces.jsonl"))
+    assert row["outcome"] == "ERROR" and row["valid"] is False and "TooManyRequestsError" in row["errors"]

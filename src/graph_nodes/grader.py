@@ -11,9 +11,13 @@ def grader(graph_state: GraphState) -> Dict[str, Any]:
         return_exceptions=True,
     )
     kept = []
+    errors = [f"GRADER: {type(g).__name__}" for g in grades if isinstance(g, Exception)]
     for document, grade in zip(documents, grades):
         is_relevant = isinstance(grade, RetrievalGraderOutput) and grade.relevant
         print(f"  {'keep' if is_relevant else 'drop'}: {source_label(document)}")
         if is_relevant:
             kept.append(document)
-    return {"documents": kept, "relevant": bool(kept)}
+    update: Dict[str, Any] = {"documents": kept, "relevant": bool(kept)}
+    if errors:  # a failed grade drops the document, so "no relevant documents" may be an outage
+        update["errors"] = errors
+    return update

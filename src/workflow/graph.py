@@ -25,7 +25,7 @@ def route_query(state: GraphState) -> Dict[str, Any]:
         source = decision.source if isinstance(decision, QueryRouter) else "VECTORSTORE"
     except Exception as exc:  # the router is a model call; don't let it crash the request
         print(f"Router failed ({type(exc).__name__}); defaulting to VECTORSTORE")
-        source = "VECTORSTORE"
+        return {"source": "VECTORSTORE", "errors": [f"ROUTE: {type(exc).__name__}"]}
     print(f"Routed to: {source}")
     return {"source": source}
 

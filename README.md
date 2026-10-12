@@ -32,6 +32,10 @@ Compare the baseline with the risk-routed assistant on your own questions:
 2. Run `uv run python -m eval.run_eval`.
 3. Read `eval/results/summary.txt`; per-question details are in `results.csv`, and traces in `traces.jsonl`.
 
+A question is left out of the rates if any of its runs had a failed model or service call (a rate limit, a timeout): the fallback would otherwise be counted as a decision, such as a decline caused by an outage. The summary says how many were left out; re-run them.
+
+Model calls are spaced out to stay within the API rate limit (Cohere trial keys allow 20 chat calls a minute and 1,000 a month), so a full run takes a while. With a production key, set `COHERE_CALLS_PER_MINUTE` higher.
+
 Every delivered answer, in both versions, is checked by the same groundedness judge. The judge is an LLM too, so spot-check its verdicts before quoting the numbers. `eval/results/` is git-ignored because it contains document text.
 
 ## Usage examples

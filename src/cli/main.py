@@ -46,6 +46,8 @@ def main():
 
     print(f"\nSource: {state.get('source')} | Risk: {state.get('risk')} | Outcome: {state.get('outcome')}")
     print(f"Answer: {state.get('final_answer', 'No response generated.')}")
+    if state.get("errors"):
+        print(f"Warning: some calls failed and fallbacks were used: {'; '.join(state['errors'])}")
     print(sink.session_summary())
 
 def format_response(result):

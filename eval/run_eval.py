@@ -10,6 +10,11 @@ of each run; the judge's own calls are not counted.
 
 The judge is an LLM too: spot-check a sample of its verdicts by hand before
 quoting the numbers.
+
+A run in which a model or service call failed (a rate limit, a timeout) is
+marked invalid and left out of the rates: its fallback would otherwise be
+counted as a decision, e.g. a decline caused by an outage. Re-run those
+questions before quoting the numbers.
 """
 
 import argparse
@@ -48,12 +53,20 @@ def run_one(app, question: Dict, mode: str, sink: JsonlEventSink) -> Dict:
     tracer = AgentTracer(service_name="ekm-eval", sink=sink)
     metadata = {"query": question["query"], "mode": mode, "question_id": question["id"]}
     with tracer.session(agent_id="ekm-eval", metadata=metadata):
-        state = app.invoke({"query": question["query"]}, config={"callbacks": [AgentTraceCallback(tracer)]})
+        try:
+            state = app.invoke({"query": question["query"]}, config={"callbacks": [AgentTraceCallback(tracer)]})
+        except Exception as exc:  # a node without a fallback failed; record it and move on
+            state = {"outcome": "ERROR", "errors": [f"{type(exc).__name__}: {exc}"[:200]]}
     session = sink.last_session_end
 
     outcome = state.get("outcome", "")
     delivered = outcome.startswith("ANSWERED")
-    claims = judge(state) if delivered else []
+    try:
+        claims = judge(state) if delivered else []
+    except Exception as exc:
+        claims = []
+        state["errors"] = state.get("errors", []) + [f"JUDGE: {type(exc).__name__}"]
+    errors = state.get("errors", [])
     return {
         "id": question["id"],
         "mode": mode,
@@ -65,6 +78,8 @@ def run_one(app, question: Dict, mode: str, sink: JsonlEventSink) -> Dict:
         "risk": state.get("risk", ""),
         "risk_reasons": "; ".join(state.get("risk_reasons", [])),
         "outcome": outcome,
+        "valid": not errors,
+        "errors": " | ".join(errors),
         "delivered": delivered,
         "judge_unsupported_count": len(claims) if delivered else "",
         "judge_unsupported_claims": " | ".join(claims),
@@ -89,8 +104,13 @@ def summarize(rows: List[Dict]) -> str:
     for row in rows:
         by_mode[row["mode"]].append(row)
 
+    # Leave a question out of every mode if any of its runs failed, so the modes
+    # are compared on the same questions.
+    invalid_ids = {r["id"] for r in rows if not r["valid"]}
+
     lines = []
-    for mode, rs in by_mode.items():
+    for mode, all_rows in by_mode.items():
+        rs = [r for r in all_rows if r["id"] not in invalid_ids]
         n = len(rs)
         delivered = [r for r in rs if r["delivered"]]
         unsupported = [r for r in delivered if (r["judge_unsupported_count"] or 0) > 0]
@@ -100,6 +120,8 @@ def summarize(rows: List[Dict]) -> str:
         source_ok = [r for r in source_labelled if r["source"] == r["expected_source"]]
 
         lines.append(f"\n== {mode} ({n} questions) ==")
+        if len(all_rows) > n:
+            lines.append(f"Left out, a call failed in some run: {len(all_rows) - n} (see the errors column; re-run them)")
         lines.append(f"Answers delivered:                   {_pct(len(delivered), n)}")
         lines.append(f"Delivered with unsupported claims:   {_pct(len(unsupported), n)}")
         lines.append(f"Declined:                            {_pct(len(declined), n)}")

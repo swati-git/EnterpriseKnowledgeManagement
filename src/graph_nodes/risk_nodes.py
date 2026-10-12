@@ -10,7 +10,11 @@ def assess_risk(state: GraphState) -> Dict[str, Any]:
     """Decide how strictly this question's answer must be checked, before anything is retrieved."""
     risk, reasons = risk_router.assess_question_risk(state["query"])
     print(f"---RISK: {risk} ({'; '.join(reasons)})---")
-    return {"risk": risk, "risk_reasons": reasons}
+    update: Dict[str, Any] = {"risk": risk, "risk_reasons": reasons}
+    failed = [r for r in reasons if r.startswith("classifier failed")]
+    if failed:
+        update["errors"] = [f"ASSESS_RISK: {r}" for r in failed]
+    return update
 
 
 def check_answer_risk(state: GraphState) -> Dict[str, Any]:
@@ -63,7 +67,7 @@ def check_groundedness(state: GraphState) -> Dict[str, Any]:
         )
     except Exception as exc:  # a strict answer that can't be checked is not delivered
         print(f"Groundedness check failed ({type(exc).__name__}); failing closed")
-        return {"unsupported_claims": [COULD_NOT_VERIFY]}
+        return {"unsupported_claims": [COULD_NOT_VERIFY], "errors": [f"CHECK_GROUNDEDNESS: {type(exc).__name__}"]}
     if not isinstance(result, GroundednessOutput):
         return {"unsupported_claims": [COULD_NOT_VERIFY]}
     claims = [c for c in result.unsupported_claims if c.strip()]
