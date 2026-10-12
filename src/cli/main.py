@@ -5,10 +5,12 @@ from typing import TypedDict
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.workflow.graph import application
-from src.create_vectorstore.create_vectorstore import initialize_vectorstore
+from src.create_vectorstore.create_vectorstore import build_vectorstore, index_size
 
 def main():  
-    initialize_vectorstore()
+    if index_size() == 0:
+        print("The document index is empty; building it once (this embeds every PDF).")
+        build_vectorstore()
     
     query = input("Type your query:")
     print(f"You asked: {query}")

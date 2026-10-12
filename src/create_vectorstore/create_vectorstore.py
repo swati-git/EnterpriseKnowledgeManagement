@@ -1,60 +1,113 @@
-import os
-from langchain_community.document_loaders import  DirectoryLoader, PyPDFLoader
+"""Build the vector index once, then open it for every query.
+
+Build or rebuild the index from the PDFs in enterprise_data/:
+    python -m src.create_vectorstore.create_vectorstore            # builds only if empty
+    python -m src.create_vectorstore.create_vectorstore --rebuild  # re-embeds everything
+"""
+
+import argparse
 from pathlib import Path
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import  Chroma
+from typing import List, Optional
+
 from dotenv import load_dotenv
-from langchain_cohere import CohereEmbeddings
-from langchain.schema import Document
+from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader
+from langchain_community.vectorstores import Chroma
+from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
+from langchain_core.vectorstores import VectorStoreRetriever
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 load_dotenv()
 
-def load_documents() -> list[Document]:
-    path= Path(__file__).parent.parent.parent / "enterprise_data"
-    PROJECT_ROOT = Path(__file__).parent.parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = PROJECT_ROOT / "enterprise_data"
+DB_DIR = PROJECT_ROOT / "vectorstore_db"
+COLLECTION_NAME = "enterprise_documents"
 
-    document_loader=DirectoryLoader(str(path) ,glob="*.pdf",loader_cls=PyPDFLoader) # type: ignore
-    return document_loader.load() 
+# Starting values, not tuned. Fund documents state fees and terms in tables
+# and long sentences, so very small chunks split them apart. Measure before changing.
+CHUNK_SIZE = 800
+CHUNK_OVERLAP = 150
+TOP_K = 4
 
-def split_text(documents: list[Document]):
-  """
-  Split the text content of the given list of Document objects into smaller chunks.
-  Args:
-    documents (list[Document]): List of Document objects containing text content to split.
-  Returns:
-    list[Document]: List of Document objects representing the split text chunks.
-  """
-  # Initialize text splitter with specified parameters
-  text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=300, # Size of each chunk in characters
-    chunk_overlap=100, # Overlap between consecutive chunks
-    length_function=len, # Function to compute the length of the text
-    add_start_index=True, # Flag to add start index to each chunk
-  )
-  chunks = text_splitter.split_documents(documents)
+_vectorstore: Optional[Chroma] = None
 
-  return chunks 
 
-def save_to_chroma(documents: list[Document]):
-   global vectorstore
-   
-   vectorstore_db_path= Path(__file__).parent.parent.parent / "vectorstore_db"
-   embeddings = CohereEmbeddings( model="embed-english-v3.0")   
-   
-   vectorstore = Chroma.from_documents(
-        documents=documents,
-        embedding=embeddings,
-        persist_directory=str(vectorstore_db_path)
+def _default_embeddings() -> Embeddings:
+    from langchain_cohere import CohereEmbeddings
+
+    return CohereEmbeddings(model="embed-english-v3.0")
+
+
+def load_documents(data_dir: Path = DATA_DIR) -> List[Document]:
+    if not data_dir.exists():
+        raise FileNotFoundError(f"No document folder at {data_dir}. Put the PDFs there first.")
+    loader = DirectoryLoader(str(data_dir), glob="*.pdf", loader_cls=PyPDFLoader)  # type: ignore[arg-type]
+    return loader.load()
+
+
+def split_text(documents: List[Document]) -> List[Document]:
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
+        length_function=len,
+        add_start_index=True,
     )
-   vectorstore.persist()
+    return splitter.split_documents(documents)
 
-def initialize_retriever():
-   retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-   return retriever
 
-def initialize_vectorstore():
-    
-    documents = load_documents()
-    split_documents = split_text(documents)
-    save_to_chroma(split_documents)
+def get_vectorstore(
+    embeddings: Optional[Embeddings] = None, persist_directory: Optional[Path] = None
+) -> Chroma:
+    """Open the persisted index. Never embeds anything."""
+    global _vectorstore
+    if _vectorstore is None:
+        _vectorstore = Chroma(
+            collection_name=COLLECTION_NAME,
+            embedding_function=embeddings or _default_embeddings(),
+            persist_directory=str(persist_directory or DB_DIR),
+        )
+    return _vectorstore
 
+
+def reset_vectorstore_cache() -> None:
+    global _vectorstore
+    _vectorstore = None
+
+
+def index_size() -> int:
+    return get_vectorstore()._collection.count()
+
+
+def build_vectorstore(rebuild: bool = False, documents: Optional[List[Document]] = None) -> int:
+    """Embed the documents into the index. Skips the work if the index already has data.
+
+    The original code called Chroma.from_documents on every start, which appended a
+    fresh copy of every chunk each time, so retrieval started returning duplicates.
+    """
+    store = get_vectorstore()
+    existing = store._collection.count()
+    if existing and not rebuild:
+        print(f"Index already has {existing} chunks; skipping. Use --rebuild to re-embed.")
+        return existing
+
+    if existing:
+        store.delete(ids=store.get()["ids"])
+
+    chunks = split_text(documents if documents is not None else load_documents())
+    if not chunks:
+        raise ValueError("No text found in the documents; nothing to index.")
+    store.add_documents(chunks)
+    count = store._collection.count()
+    print(f"Indexed {count} chunks into {DB_DIR}.")
+    return count
+
+
+def get_retriever(k: int = TOP_K) -> VectorStoreRetriever:
+    return get_vectorstore().as_retriever(search_kwargs={"k": k})
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--rebuild", action="store_true", help="delete the index and re-embed every document")
+    build_vectorstore(rebuild=parser.parse_args().rebuild)
