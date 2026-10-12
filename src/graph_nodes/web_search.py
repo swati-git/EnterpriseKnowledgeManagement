@@ -11,7 +11,7 @@ load_dotenv()
 def web_search(graph_state: GraphState) -> Dict[str, Any]:
     print("---WEB SEARCH---")
    
-    tavily_results = web_search_tool.invoke({"query" : graph_state["query"]})["results"]
+    tavily_results = web_search_tool.invoke({"query" : graph_state["query"]})
     results = tavily_results.get("results", []) if isinstance(tavily_results, dict) else []
     documents = [
         Document(
