@@ -69,3 +69,24 @@ def test_fast_question_with_a_plain_answer_stays_fast(wired):  # noqa: F811
     s["answer"].result = "Diversification spreads money across different assets."
     state = app.invoke({"query": "What does diversification mean?"})
     assert state["risk"] == "FAST"
+
+
+# ---------- R3: outcomes and sources ----------
+
+def test_answer_is_delivered_with_its_sources(wired):  # noqa: F811
+    app, _ = wired
+    state = app.invoke({"query": "What is the lock-in period of our fund?"})
+    assert state["final_answer"].startswith("Fund A has a 3 year lock-in.")
+    assert state["final_answer"].endswith("Sources: fund_a.pdf (page 1)")
+
+
+def test_every_run_records_an_outcome(wired):  # noqa: F811
+    app, s = wired
+    s["grader"].fn = lambda p: RetrievalGraderOutput(relevant=True)
+    s["answer"].result = "Diversification spreads money across different assets."
+    assert app.invoke({"query": "What does diversification mean?"})["outcome"] == "ANSWERED_FAST"
+
+    s["retriever"].result = []
+    declined = app.invoke({"query": "What is the lock-in period of our fund?"})
+    assert declined["outcome"] == "DECLINED_NO_RELEVANT_DOCS"
+    assert declined["final_answer"] == declined["llm_generated_response"]

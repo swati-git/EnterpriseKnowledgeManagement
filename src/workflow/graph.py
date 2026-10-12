@@ -8,7 +8,7 @@ from src.graph_nodes.grader import grader
 from src.graph_nodes.vectorstore import vectorstore
 from src.graph_nodes.web_search import web_search
 from src.graph_state.state import GraphState
-from src.graph_nodes.risk_nodes import assess_risk, check_answer_risk
+from src.graph_nodes.risk_nodes import assess_risk, check_answer_risk, finalize
 
 
 def route_query(state: GraphState) -> Dict[str, Any]:
@@ -43,6 +43,7 @@ workflow.add_node("GENERATE_ANSWER", generate)
 workflow.add_node("NO_RELEVANT_DOCUMENTS", no_relevant_documents)
 workflow.add_node("ASSESS_RISK", assess_risk)
 workflow.add_node("CHECK_ANSWER_RISK", check_answer_risk)
+workflow.add_node("FINALIZE", finalize)
 
 workflow.add_edge(START, "ASSESS_RISK")
 workflow.add_edge("ASSESS_RISK", "ROUTE")
@@ -55,7 +56,8 @@ workflow.add_conditional_edges(
     {"GENERATE_ANSWER": "GENERATE_ANSWER", "NO_RELEVANT_DOCUMENTS": "NO_RELEVANT_DOCUMENTS"},
 )
 workflow.add_edge("GENERATE_ANSWER", "CHECK_ANSWER_RISK")
-workflow.add_edge("CHECK_ANSWER_RISK", END)
+workflow.add_edge("CHECK_ANSWER_RISK", "FINALIZE")
+workflow.add_edge("FINALIZE", END)
 workflow.add_edge("NO_RELEVANT_DOCUMENTS", END)
 
 application = workflow.compile()

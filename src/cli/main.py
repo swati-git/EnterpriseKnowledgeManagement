@@ -39,8 +39,8 @@ def main():
         state = application.invoke({"query": query}, config={"callbacks": callbacks})
                     
 
-    print(f"\nSource: {state.get('source')}")
-    print(f"Answer: {state.get('llm_generated_response', 'No response generated.')}")
+    print(f"\nSource: {state.get('source')} | Risk: {state.get('risk')} | Outcome: {state.get('outcome')}")
+    print(f"Answer: {state.get('final_answer', 'No response generated.')}")
     print(sink.session_summary())
 
 def format_response(result):

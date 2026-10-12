@@ -11,3 +11,5 @@ class GraphState(TypedDict):
     relevant: bool
     risk: Literal["FAST", "STRICT"]
     risk_reasons: List[str]
+    final_answer: str  # what the user sees: the answer with its sources, or a decline
+    outcome: str  # ANSWERED_FAST, ANSWERED_UNVERIFIED, DECLINED_NO_RELEVANT_DOCS, ...

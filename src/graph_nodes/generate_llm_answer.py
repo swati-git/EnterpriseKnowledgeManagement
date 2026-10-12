@@ -11,7 +11,11 @@ NO_RELEVANT_DOCUMENTS = (
 
 def no_relevant_documents(state: GraphState) -> Dict[str, Any]:
         print("---NO RELEVANT DOCUMENTS---")
-        return {"llm_generated_response": NO_RELEVANT_DOCUMENTS}
+        return {
+            "llm_generated_response": NO_RELEVANT_DOCUMENTS,
+            "final_answer": NO_RELEVANT_DOCUMENTS,
+            "outcome": "DECLINED_NO_RELEVANT_DOCS",
+        }
 
 
 def generate(state: GraphState) -> Dict[str, Any]:
