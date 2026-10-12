@@ -9,3 +9,5 @@ class GraphState(TypedDict):
     llm_generated_response: str
     documents : List[Document]
     relevant: bool
+    risk: Literal["FAST", "STRICT"]
+    risk_reasons: List[str]

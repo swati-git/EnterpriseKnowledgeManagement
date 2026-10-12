@@ -8,6 +8,7 @@ from src.graph_nodes.grader import grader
 from src.graph_nodes.vectorstore import vectorstore
 from src.graph_nodes.web_search import web_search
 from src.graph_state.state import GraphState
+from src.graph_nodes.risk_nodes import assess_risk
 
 
 def route_query(state: GraphState) -> Dict[str, Any]:
@@ -40,8 +41,10 @@ workflow.add_node("VECTORSTORE", vectorstore)
 workflow.add_node("GRADER", grader)
 workflow.add_node("GENERATE_ANSWER", generate)
 workflow.add_node("NO_RELEVANT_DOCUMENTS", no_relevant_documents)
+workflow.add_node("ASSESS_RISK", assess_risk)
 
-workflow.add_edge(START, "ROUTE")
+workflow.add_edge(START, "ASSESS_RISK")
+workflow.add_edge("ASSESS_RISK", "ROUTE")
 workflow.add_conditional_edges("ROUTE", after_routing, {"WEBSEARCH": "WEBSEARCH", "VECTORSTORE": "VECTORSTORE"})
 workflow.add_edge("WEBSEARCH", "GRADER")
 workflow.add_edge("VECTORSTORE", "GRADER")
