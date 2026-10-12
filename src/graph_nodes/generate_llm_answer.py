@@ -1,6 +1,8 @@
 from typing import Any, Dict
 from src.chains.llm_repsonse_generation_chain import response_formatter
 from src.graph_state.state import GraphState
+from src.chains.formatting import format_documents
+
 
 NO_RELEVANT_DOCUMENTS = (
     "I couldn't find information relevant to this question, so I'm not going to guess. "
@@ -13,15 +15,8 @@ def no_relevant_documents(state: GraphState) -> Dict[str, Any]:
 
 
 def generate(state: GraphState) -> Dict[str, Any]:
-    """Generate answer using documents and question."""
-    
     print("---GENERATE---")
-    
-    question = state["query"]
-    documents = state["documents"]
-    llm_generated_response = response_formatter.invoke({"documents": documents, "query": question})
-    print(f"LLM Generated Response: {llm_generated_response}")
-
-    return {
-        "llm_generated_response": llm_generated_response
-        }
+    answer = response_formatter.invoke(
+        {"query": state["query"], "documents": format_documents(state.get("documents", []))}
+    )
+    return {"llm_generated_response": answer}
