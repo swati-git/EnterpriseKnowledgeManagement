@@ -8,6 +8,9 @@ Two rules shape it:
    gets to talk itself out of checking.
 2. Fail closed. If the classifier errors or returns something unusable, the
    question goes STRICT.
+
+The answer is classified too, not just the question: a harmless-sounding
+question can still produce an answer full of figures someone will act on.
 """
 
 import re
@@ -27,6 +30,12 @@ QUESTION_RULES = {
     "our own products or policies": r"\b(our|my|this)\s+(funds?|plans?|schemes?|portfolios?|polic(y|ies)|accounts?|products?)\b",
     "terms, eligibility or deadlines": r"\b(eligib\w*|lock[- ]?in|tenure|maturity|penalt\w*|withdraw\w*|redeem\w*|redemption|exit load|tax\w*|deadline|limit)\b",
     "advice someone may act on": r"\b(should i|should we|do you recommend|best (fund|plan|option)|which (fund|plan|option))\b",
+}
+
+ANSWER_RULES = {
+    "answer contains figures": r"(\d+(\.\d+)?\s?%|[$€£₹]\s?\d|\b\d{1,3}(,\d{3})+\b)",
+    "answer gives a directive": r"\b(you should|you must|we recommend|it is advisable)\b",
+    "answer states dates or durations": r"\b\d+\s+(days?|weeks?|months?|years?)\b",
 }
 
 
@@ -64,3 +73,8 @@ def assess_question_risk(query: str) -> Tuple[Risk, List[str]]:
     if not isinstance(result, RiskAssessment):
         return "STRICT", ["classifier returned no usable answer; failing closed"]
     return result.risk, [f"classifier: {result.reason}"]
+
+
+def assess_answer_risk(answer: str) -> List[str]:
+    """Return the reasons an answer itself needs strict checking (empty if none)."""
+    return [f"rule: {hit}" for hit in _matches(answer or "", ANSWER_RULES)]

@@ -3,6 +3,7 @@
 import pytest
 
 from src.chains import risk_router
+from src.chains.retrieval_grader import RetrievalGraderOutput
 from src.chains.risk_router import RiskAssessment, assess_question_risk
 from tests.test_baseline import Stub, wired  # noqa: F401  (reuse the stubbed graph)
 
@@ -42,3 +43,29 @@ def test_risk_is_recorded_in_the_state(wired):  # noqa: F811
     state = app.invoke({"query": "What is the lock-in period of our fund?"})
     assert state["risk"] == "STRICT"
     assert any("lock" in r or "terms" in r for r in state["risk_reasons"])
+
+
+# ---------- R2: answer risk ----------
+
+def test_answer_rules_flag_figures_directives_and_durations():
+    assert risk_router.assess_answer_risk("Index funds have returned about 8% a year.")
+    assert risk_router.assess_answer_risk("You should hold it for 3 years.")
+    assert risk_router.assess_answer_risk("Diversification spreads risk across assets.") == []
+
+
+def test_fast_question_with_figures_in_the_answer_is_escalated(wired):  # noqa: F811
+    app, s = wired
+    s["grader"].fn = lambda p: RetrievalGraderOutput(relevant=True)
+    s["answer"].result = "Index funds have historically returned around 10% a year."
+    state = app.invoke({"query": "How do index funds work?"})
+    assert state["risk"] == "STRICT"
+    assert state["risk_reasons"][0].startswith("classifier:")
+    assert any("figures" in r for r in state["risk_reasons"])
+
+
+def test_fast_question_with_a_plain_answer_stays_fast(wired):  # noqa: F811
+    app, s = wired
+    s["grader"].fn = lambda p: RetrievalGraderOutput(relevant=True)
+    s["answer"].result = "Diversification spreads money across different assets."
+    state = app.invoke({"query": "What does diversification mean?"})
+    assert state["risk"] == "FAST"
