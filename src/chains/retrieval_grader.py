@@ -1,5 +1,5 @@
 import re
-from src.models.model import llm_model
+from src.models.model import decision_model
 from langchain.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
@@ -25,6 +25,4 @@ retrieval_grader_template = ChatPromptTemplate.from_messages(
     ]
 )
 
-llm_model_with_structured_output = llm_model.with_structured_output(RetrievalGraderOutput)
-
-retrieval_grader =  retrieval_grader_template | llm_model_with_structured_output
+retrieval_grader =  retrieval_grader_template | decision_model.with_structured_output(RetrievalGraderOutput)
