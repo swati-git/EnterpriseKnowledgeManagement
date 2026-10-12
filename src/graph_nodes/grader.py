@@ -1,6 +1,6 @@
 from typing import Any, Dict
 from src.graph_state.state import GraphState
-from src.chains.retrieval_grader import RetrievalGraderOutput, retrieval_grader
+from src.chains.retrieval_grader import retrieval_grader
 
 def grader(graph_state: GraphState) -> Dict[str, Any]:
     grade = retrieval_grader.invoke(
@@ -14,5 +14,4 @@ def grader(graph_state: GraphState) -> Dict[str, Any]:
     for document in list_of_documents:
       print(f"Document : {document}")  
     print(f"Grader graded the documents as : {grade}")
-    relevant = isinstance(grade, RetrievalGraderOutput) and grade.relevant
-    return {"relevant": relevant}
+    return {"relevant": bool(grade and grade.relevant)}
