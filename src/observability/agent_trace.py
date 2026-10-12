@@ -20,7 +20,7 @@ from agent_trace_sdk.models import BaseEvent
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
 
-TRACE_FILE = Path(__file__).resolve().parent.parent.parent / "telemetry" / "agent_trace_events.jsonl"
+TRACE_FILE = Path(__file__).resolve().parent.parent / "telemetry" / "agent_trace_events.jsonl"
 MAX_TEXT = 2000  # keep stored responses and tool outputs readable, and the file small
 
 
