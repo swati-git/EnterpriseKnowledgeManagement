@@ -15,7 +15,6 @@ from src.models.model import decision_model,retry_on_rate_limit
 
 class GroundednessOutput(BaseModel):
     unsupported_claims: List[str] = Field(
-        default_factory=list,
         description="Each factual statement in the answer that the documents do not support. Empty if all are supported.",
     )
 

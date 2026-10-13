@@ -259,3 +259,20 @@ def test_eval_survives_a_node_that_raises(wired, monkeypatch, tmp_path):  # noqa
     row = run_eval.run_one(run_eval.MODES[0][1], {"id": "q1", "query": "What is the lock-in period of our fund?"},
                            "baseline", JsonlEventSink(tmp_path / "traces.jsonl"))
     assert row["outcome"] == "ERROR" and row["valid"] is False and "TooManyRequestsError" in row["errors"]
+
+
+
+# --- Structured output schemas ------------------------------------------------
+
+from src.chains.groundedness_checker import GroundednessOutput as _Groundedness
+from src.chains.query_router import QueryRouter as _QueryRouter
+
+
+@pytest.mark.parametrize("model", [_Groundedness, RiskAssessment, RetrievalGraderOutput, _QueryRouter])
+def test_structured_output_schemas_have_a_required_field(model):
+    """Cohere rejects a schema whose object has no required field (400 BadRequestError).
+
+    Regression: GroundednessOutput had a default, so every groundedness check and
+    every judge call failed, and every strict answer was withheld.
+    """
+    assert model.model_json_schema().get("required")
