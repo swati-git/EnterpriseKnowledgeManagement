@@ -14,6 +14,6 @@ class GraphState(TypedDict):
     risk_reasons: List[str]
     unsupported_claims: List[str]  # statements the groundedness check could not verify
     final_answer: str  # what the user sees: the answer with its sources, or a decline
-    outcome: str  # ANSWERED_FAST, ANSWERED_VERIFIED, DECLINED_UNSUPPORTED, DECLINED_NO_RELEVANT_DOCS
+    outcome: str  # ANSWERED_FAST, ANSWERED_VERIFIED, DECLINED_UNSUPPORTED, DECLINED_NO_RELEVANT_DOCS, DECLINED_UNVERIFIED
     # Model or service calls that failed and were replaced by a fallback. Nodes add to it.
     errors: Annotated[List[str], operator.add]

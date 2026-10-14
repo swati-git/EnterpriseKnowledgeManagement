@@ -118,8 +118,10 @@ def test_groundedness_failure_fails_closed(wired):  # noqa: F811
     app, s = wired
     s["grounded"].error = TimeoutError("slow")
     state = app.invoke({"query": "What is the lock-in period of our fund?"})
-    assert state["outcome"] == "DECLINED_UNSUPPORTED"
-    assert "could not be checked" in state["final_answer"]
+        # Still withheld, but the message says the check didn't run, not that the answer was wrong.
+    assert state["outcome"] == "DECLINED_UNVERIFIED"
+    assert "couldn't check it" in state["final_answer"]
+    assert "aren't supported" not in state["final_answer"]
 
 
 def test_fast_answer_skips_the_groundedness_check(wired):  # noqa: F811
