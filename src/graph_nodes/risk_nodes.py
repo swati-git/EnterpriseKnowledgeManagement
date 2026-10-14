@@ -77,6 +77,15 @@ def check_groundedness(state: GraphState) -> Dict[str, Any]:
 
 def decline_unsupported(state: GraphState) -> Dict[str, Any]:
     """Say why the answer is withheld, and which claims couldn't be verified."""
+    if state.get("unsupported_claims") == [COULD_NOT_VERIFY]:
+        # The check itself didn't run: say that, rather than blame the answer.
+        print("---DECLINED_UNVERIFIED---")
+        message = (
+            "I drafted an answer, but I couldn't check it against the documents just now, "
+            "so I'm not sharing it. Please try again shortly."
+        )
+        return {"final_answer": message, "outcome": "DECLINED_UNVERIFIED"}
+    
     listed = "\n".join(f"- {claim}" for claim in state.get("unsupported_claims", []))
     message = (
         "I drafted an answer, but parts of it aren't supported by the documents, "
